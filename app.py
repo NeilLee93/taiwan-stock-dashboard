@@ -69,12 +69,25 @@ def get_stock_chinese_name(ticker_num):
 
     return f"股票 {ticker_num}"
 
+# --- 4. 抓取股價資料 (🌟 加上偽裝 Session 破解 Yahoo 防護) ---
 @st.cache_data
 def load_data(ticker_num, period):
+    # 建立一個帶有瀏覽器偽裝的 Session
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    })
+    
     for suffix in [".TW", ".TWO"]:
         ticker = f"{ticker_num}{suffix}"
-        data = yf.Ticker(ticker).history(period=period)
-        if not data.empty: return data, ticker
+        # 🌟 關鍵破解：將這個偽裝的 session 傳遞給 yfinance
+        try:
+            data = yf.Ticker(ticker, session=session).history(period=period)
+            if not data.empty: 
+                return data, ticker
+        except:
+            continue # 如果這個後綴失敗，繼續嘗試下一個
+            
     return None, None
 
 # 🌟 就是這裡！剛剛不小心消失的關鍵兩行我補回來了
