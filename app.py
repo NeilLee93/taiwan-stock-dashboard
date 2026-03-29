@@ -39,12 +39,10 @@ with st.sidebar:
     st.markdown("---")
     st.caption("⚖️ 系統免責聲明：本系統數據與訊號僅供歷史回測參考，不構成任何投資建議。投資人應獨立判斷並自負盈虧。")
 
-# --- 3. 獲取中文名稱與股價資料 (🌟 升級防禦版) ---
-@st.cache_data
+# --- 3. 獲取中文名稱 ---
+@st.cache_data(ttl=86400) # 名稱可以記久一點 (一天)
 def get_stock_chinese_name(ticker_num):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
         res_twse = requests.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", headers=headers, timeout=10)
         if res_twse.status_code == 200:
@@ -55,49 +53,48 @@ def get_stock_chinese_name(ticker_num):
         if res_tpex.status_code == 200:
             for item in res_tpex.json():
                 if item['SecuritiesCompanyCode'] == str(ticker_num): return item['CompanyName']
-    except:
-        pass
+    except: pass
 
     try:
         tw_info = yf.Ticker(f"{ticker_num}.TW").info
         if 'shortName' in tw_info: return tw_info['shortName']
-        
         two_info = yf.Ticker(f"{ticker_num}.TWO").info
         if 'shortName' in two_info: return two_info['shortName']
-    except:
-        pass
-
+    except: pass
     return f"股票 {ticker_num}"
 
-# --- 4. 抓取股價資料 (🌟 加上偽裝 Session 破解 Yahoo 防護) ---
-@st.cache_data
+# --- 4. 抓取股價資料 (🌟 升級：避免快取陷阱與回報錯誤) ---
+@st.cache_data(ttl=300) # 🌟 關鍵：只快取 5 分鐘，避免永遠記住失敗結果
 def load_data(ticker_num, period):
-    # 建立一個帶有瀏覽器偽裝的 Session
     session = requests.Session()
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     })
     
+    error_logs = [] # 用來蒐集伺服器底層的錯誤訊息
     for suffix in [".TW", ".TWO"]:
         ticker = f"{ticker_num}{suffix}"
-        # 🌟 關鍵破解：將這個偽裝的 session 傳遞給 yfinance
         try:
             data = yf.Ticker(ticker, session=session).history(period=period)
             if not data.empty: 
-                return data, ticker
-        except:
-            continue # 如果這個後綴失敗，繼續嘗試下一個
+                return data, ticker, ""
+        except Exception as e:
+            error_logs.append(f"抓取 {ticker} 時發生錯誤: {str(e)}")
+            continue
             
-    return None, None
+    return None, None, " | ".join(error_logs)
 
-# 🌟 就是這裡！剛剛不小心消失的關鍵兩行我補回來了
-stock_data_raw, real_ticker = load_data(stock_input, period_value)
+stock_data_raw, real_ticker, fetch_errors = load_data(stock_input, period_value)
 stock_name = get_stock_chinese_name(stock_input)
 
-# --- 4. 專業回測引擎 ---
+# --- 5. 專業回測引擎 ---
 if stock_data_raw is None:
     st.title("📉 台股智能多維度策略分析")
     st.error(f"❌ 找不到代碼 {stock_input} 的資料！請確認代碼是否正確。")
+    # 🌟 升級：把真正的死因印在畫面上
+    if fetch_errors:
+        st.warning(f"⚠️ 雲端伺服器底層錯誤日誌：\n{fetch_errors}")
+        st.caption("💡 提示：如果你的電腦版可以正常抓資料，但雲端版一直出現 `YFRateLimitError` 等錯誤，代表 Streamlit 雲端的共用 IP 正遭到 Yahoo Finance 封鎖。這時建議將程式部署在您的私人備用手機或電腦上運行。")
 else:
     st.title(f"📊 {stock_name} ({real_ticker}) 進出場策略決策系統")
     
@@ -194,7 +191,7 @@ else:
             best_equity_curve, best_records, best_trades, best_annual_return, best_sharpe, best_profit_loss_ratio, best_win_rate = equity_c, recs, trades, ann_ret, sharpe_r, pl_ratio, win_rt
             best_buy_signals, best_sell_signals = buy_sig, sell_sig
 
-    # --- 5. 實戰決策引擎：最新一日訊號判定 ---
+    # --- 6. 實戰決策引擎 ---
     st.markdown("---")
     latest_date = df.index[-1].strftime('%Y-%m-%d')
     latest_close = df['Close'].iloc[-1]
@@ -208,14 +205,14 @@ else:
     else:
         st.info(f"### 🔔 最新實戰指示 ({latest_date} 收盤價 {latest_close:.2f} 元)\n**⚪ 維持觀望 (Hold)**。依據最佳策略【{best_strategy_name}】，今日未觸發任何進退場訊號，請維持目前部位或空手等待。")
 
-    # --- 6. 網頁視覺化呈現 ---
+    # --- 7. 網頁視覺化呈現 ---
     st.success(f"👑 **系統自動選定最佳策略：【{best_strategy_name}】** (此為該股票在【{period_display}】內歷史報酬最高之配置)")
     
     col1, col2, col3, col4 = st.columns(4)
-    with col1: st.metric("年化報酬率 (專業獲利指標)", f"{best_annual_return:.1f}%")
-    with col2: st.metric("夏普比率 (風險收益比)", f"{best_sharpe:.2f}")
-    with col3: st.metric("獲利/虧損比 (賺賠比)", f"{best_profit_loss_ratio:.2f}")
-    with col4: st.metric("策略勝率 (歷史數據)", f"{best_win_rate:.1f}%", f"{best_trades} 次交易")
+    with col1: st.metric("年化報酬率", f"{best_annual_return:.1f}%")
+    with col2: st.metric("夏普比率", f"{best_sharpe:.2f}")
+    with col3: st.metric("賺賠比", f"{best_profit_loss_ratio:.2f}")
+    with col4: st.metric("策略勝率", f"{best_win_rate:.1f}%", f"{best_trades} 次交易")
 
     st.markdown("---")
     st.info("💧 **資金權益曲線 (Equity Curve)** —— 反映帳戶總資產（現金 + 股票市值）隨時間的變動情況")
