@@ -8,7 +8,6 @@ import numpy as np
 # --- 1. 網頁基本設定 ---
 st.set_page_config(page_title="台股智能多維度策略分析", layout="wide", initial_sidebar_state="expanded")
 
-# 🌟 UI 修復：使用 Streamlit 原生 CSS 變數，完美適配深色/淺色模式
 st.markdown("""
 <style>
     div[data-testid="stMetricValue"] {
@@ -20,7 +19,6 @@ st.markdown("""
         font-size: 16px;
         color: gray;
     }
-    /* 自動適配主題的卡片背景 */
     [data-testid="stVerticalBlock"] > div:has(> div[data-testid="stMetricValue"]) {
         background-color: var(--secondary-background-color);
         padding: 20px;
@@ -41,18 +39,35 @@ with st.sidebar:
     st.markdown("---")
     st.caption("⚖️ 系統免責聲明：本系統數據與訊號僅供歷史回測參考，不構成任何投資建議。投資人應獨立判斷並自負盈虧。")
 
-# --- 3. 獲取中文名稱與股價資料 ---
+# --- 3. 獲取中文名稱與股價資料 (🌟 升級防禦版) ---
 @st.cache_data
 def get_stock_chinese_name(ticker_num):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     try:
-        res_twse = requests.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", timeout=5)
-        for item in res_twse.json():
-            if item['Code'] == str(ticker_num): return item['Name']
-        res_tpex = requests.get("https://www.tpex.org.tw/openapi/v1/t187ap03_L", timeout=5)
-        for item in res_tpex.json():
-            if item['SecuritiesCompanyCode'] == str(ticker_num): return item['CompanyName']
-    except: pass
-    return "未知名稱"
+        res_twse = requests.get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", headers=headers, timeout=10)
+        if res_twse.status_code == 200:
+            for item in res_twse.json():
+                if item['Code'] == str(ticker_num): return item['Name']
+        
+        res_tpex = requests.get("https://www.tpex.org.tw/openapi/v1/t187ap03_L", headers=headers, timeout=10)
+        if res_tpex.status_code == 200:
+            for item in res_tpex.json():
+                if item['SecuritiesCompanyCode'] == str(ticker_num): return item['CompanyName']
+    except:
+        pass
+
+    try:
+        tw_info = yf.Ticker(f"{ticker_num}.TW").info
+        if 'shortName' in tw_info: return tw_info['shortName']
+        
+        two_info = yf.Ticker(f"{ticker_num}.TWO").info
+        if 'shortName' in two_info: return two_info['shortName']
+    except:
+        pass
+
+    return f"股票 {ticker_num}"
 
 @st.cache_data
 def load_data(ticker_num, period):
@@ -62,6 +77,7 @@ def load_data(ticker_num, period):
         if not data.empty: return data, ticker
     return None, None
 
+# 🌟 就是這裡！剛剛不小心消失的關鍵兩行我補回來了
 stock_data_raw, real_ticker = load_data(stock_input, period_value)
 stock_name = get_stock_chinese_name(stock_input)
 
@@ -126,7 +142,6 @@ else:
 
     df = stock_data_raw.copy()
     
-    # 計算指標
     df['10MA'] = df['Close'].rolling(window=10).mean()
     df['20MA'] = df['Close'].rolling(window=20).mean()
     df['Vol_MA20'] = df['Volume'].rolling(window=20).mean()
@@ -142,7 +157,6 @@ else:
     df['MACD'] = exp1 - exp2
     df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-    # 定義策略池
     strategies = {}
     strategies['短期動能強攻 (10MA突破)'] = {'buy': (df['Close'] > df['10MA']) & (df['Close'].shift(1) <= df['10MA'].shift(1)), 'sell': (df['Close'] < df['10MA']) & (df['Close'].shift(1) >= df['10MA'].shift(1))}
     strategies['波段帶量起飛 (20MA+爆量)'] = {'buy': (df['Close'] > df['20MA']) & (df['Close'].shift(1) <= df['20MA'].shift(1)) & (df['Volume'] > df['Vol_MA20']), 'sell': (df['Close'] < df['20MA']) & (df['Close'].shift(1) >= df['20MA'].shift(1))}
@@ -167,14 +181,13 @@ else:
             best_equity_curve, best_records, best_trades, best_annual_return, best_sharpe, best_profit_loss_ratio, best_win_rate = equity_c, recs, trades, ann_ret, sharpe_r, pl_ratio, win_rt
             best_buy_signals, best_sell_signals = buy_sig, sell_sig
 
-    # --- 5. 🌟 實戰決策引擎：最新一日訊號判定 ---
+    # --- 5. 實戰決策引擎：最新一日訊號判定 ---
     st.markdown("---")
     latest_date = df.index[-1].strftime('%Y-%m-%d')
     latest_close = df['Close'].iloc[-1]
     is_buy_today = best_buy_signals.iloc[-1]
     is_sell_today = best_sell_signals.iloc[-1]
 
-    # 使用 st.success / st.error / st.info 來提供自帶鮮明背景的提示框
     if is_buy_today:
         st.success(f"### 🔔 最新實戰指示 ({latest_date} 收盤價 {latest_close:.2f} 元)\n**🟢 觸發強烈買進訊號！** 依據最佳策略【{best_strategy_name}】，目前已符合進場條件。")
     elif is_sell_today:
@@ -191,14 +204,13 @@ else:
     with col3: st.metric("獲利/虧損比 (賺賠比)", f"{best_profit_loss_ratio:.2f}")
     with col4: st.metric("策略勝率 (歷史數據)", f"{best_win_rate:.1f}%", f"{best_trades} 次交易")
 
-    # 🌟 UI 升級：使用 st.info 包裝圖表標題，解決黑色背景看不清的問題
     st.markdown("---")
     st.info("💧 **資金權益曲線 (Equity Curve)** —— 反映帳戶總資產（現金 + 股票市值）隨時間的變動情況")
     
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=best_equity_curve.index, y=best_equity_curve, 
                              mode='lines', name='帳戶總資產', 
-                             line=dict(color='#3B82F6', width=3), # 亮藍色，黑白背景皆適用
+                             line=dict(color='#3B82F6', width=3),
                              opacity=0.8,
                              hovertemplate='日期: %{x}<br>資產總額: %{y:,.0f} 元<extra></extra>'))
 
@@ -207,8 +219,8 @@ else:
                       margin=dict(l=0, r=0, t=10, b=0),
                       xaxis=dict(gridcolor='rgba(128,128,128,0.2)'), 
                       yaxis=dict(gridcolor='rgba(128,128,128,0.2)', range=[initial_capital * 0.8, best_equity_curve.max() * 1.1]),
-                      paper_bgcolor='rgba(0,0,0,0)', # 透明背景
-                      plot_bgcolor='rgba(0,0,0,0)')  # 透明背景
+                      paper_bgcolor='rgba(0,0,0,0)', 
+                      plot_bgcolor='rgba(0,0,0,0)')  
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
@@ -218,7 +230,6 @@ else:
 
     st.subheader("📝 詳細交易紀錄")
     if best_records:
-        # 將最新的紀錄排在最上面，方便閱讀
         st.dataframe(pd.DataFrame(best_records).iloc[::-1], use_container_width=True, hide_index=True)
     else:
         st.info("此策略區間無交易紀錄。")
