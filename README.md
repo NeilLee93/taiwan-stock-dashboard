@@ -16,34 +16,30 @@
    ```bash
    git clone [https://github.com/你的帳號/taiwan-stock-dashboard.git](https://github.com/你的帳號/taiwan-stock-dashboard.git)
    cd taiwan-stock-dashboard
-安裝必要的 Python 套件：
-
-Bash
-pip install -r requirements.txt
-啟動 Streamlit 網頁伺服器：
-
-Bash
-streamlit run app.py
+2. 安裝必要的 Python 套件：
+   ```bash
+   pip install -r requirements.txt
+3. 啟動 Streamlit 網頁伺服器：
+   ```bash
+   streamlit run app.py
 啟動後，瀏覽器將自動開啟 http://localhost:8501。
 
 📱 行動裝置私有雲部署 (Termux + Tailscale)
 為徹底解決公共雲端平台容易遭到財經 API 封鎖的問題，強烈建議將本系統部署於備用的 Android 裝置上，打造 24 小時運作的私有財經大腦。
 
-在 Android 裝置安裝 Termux 與 Tailscale。
+1. 在 Android 裝置安裝 Termux 與 Tailscale。
 
-於 Termux 中執行環境建置：
-
-Bash
-pkg update && pkg upgrade
-pkg install python git
-下載專案並啟動：
-
-Bash
-git clone [https://github.com/你的帳號/taiwan-stock-dashboard.git](https://github.com/你的帳號/taiwan-stock-dashboard.git)
-cd taiwan-stock-dashboard
-pip install -r requirements.txt
-streamlit run app.py
-在任何登入相同 Tailscale 網路的設備上，打開瀏覽器輸入 http://<該裝置的Tailscale-IP>:8501 即可安全連線存取。
+2. 於 Termux 中執行環境建置：
+   ```bash
+   pkg update && pkg upgrade
+   pkg install python git
+3. 下載專案並啟動：
+   ```bash
+   git clone [https://github.com/你的帳號/taiwan-stock-dashboard.git](https://github.com/你的帳號/taiwan-stock-dashboard.git)
+   cd taiwan-stock-dashboard
+   pip install -r requirements.txt
+   streamlit run app.py
+4. 在任何登入相同 Tailscale 網路的設備上，打開瀏覽器輸入 http://<該裝置的Tailscale-IP>:8501 即可安全連線存取。
 
 ⚖️ 免責聲明 (Disclaimer)
 本專案所實作之「超參數最佳化」與「多維度策略組合」及所有顯示之數據與訊號，純屬歷史數據之數學運算結果，絕不構成對任何有價證券之推介、要約或具體投資建議。
