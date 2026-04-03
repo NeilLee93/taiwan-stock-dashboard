@@ -5,6 +5,22 @@ import plotly.graph_objects as go
 import requests 
 import numpy as np
 import datetime
+# --- 🌟 針對 Python 3.13 與台灣證交所憑證衝突的安全補丁 ---
+import requests
+import warnings
+from urllib3.exceptions import InsecureRequestWarning
+
+# 隱藏不安全連線的終端機黃字警告
+warnings.simplefilter('ignore', InsecureRequestWarning)
+
+# 攔截 requests 底層，強制關閉所有連線的 SSL 憑證驗證
+original_request = requests.Session.request
+
+def patched_request(self, method, url, **kwargs):
+    kwargs['verify'] = False # 強制關閉驗證
+    return original_request(self, method, url, **kwargs)
+
+requests.Session.request = patched_request
 
 # --- 1. 網頁基本設定 ---
 st.set_page_config(page_title="台股智能多維度策略分析", layout="wide", initial_sidebar_state="expanded")
